@@ -1,0 +1,62 @@
+{
+    "version": 0,
+    "name": "p_drone_video",
+    "runtime": "python",
+    "graph": ["(ImageReadDroneXR872 ImageConvert YoloDetector ImageOverlay VideoShow Metrics)"],
+    "parameters": {"_create_stream_": "1", "_destroy_stream_exit_": "1"},
+    "elements": [
+        {
+            "name": "ImageReadDroneXR872",
+            "parameters": {
+                "device_ip": "192.168.28.1",
+                "video_port": 7070,
+                "rxtx_port": 7080,
+                "data_batch_size": 1
+            },
+            "input": [{"name": "records", "type": "[bytes]"}],
+            "output": [{"name": "images", "type": "[image]"}],
+            "deploy": {"local": {"module": "aiko_services.examples.drone.drone_video"}}
+        },
+        {
+            "name": "VideoShow",
+            "input": [{"name": "images", "type": "[image]"}],
+            "output": [],
+            "deploy": {"local": {"module": "aiko_services.elements.media.video_io"}}
+        },
+        { "name":   "ImageConvert",
+          "parameters": {"media_type": "numpy"},
+          "input":  [{"name": "images", "type": "[image]"}],
+          "output": [{"name": "images", "type": "[image]"}],
+          "deploy": {
+            "local": {"module": "aiko_services.elements.media.image_io"}
+          }
+        },
+        { "name":   "YoloDetector",
+          "parameters": {
+            "model": "yoloe-11s-seg.pt",  "#": "model sizes: yoloe-11[sml]-seg.pt",
+            "names": "(bogan fuckwit glasses person mushroom book)"
+          },
+          "input":  [{"name": "images",  "type": "[image]"}],
+          "output": [{"name": "overlay", "type": "[overlay]"}],
+          "deploy": {
+            "local": {"module": "aiko_services.examples.yolo.yolo"}
+          }
+        },
+        { "name":   "ImageOverlay",
+          "input":  [{"name": "images",  "type": "[image]"},
+                     {"name": "overlay", "type": "[overlay]"}],
+          "output": [{"name": "images",  "type": "[image]"}],
+          "deploy": {
+            "local": {"module": "aiko_services.elements.media.image_io"}
+          }
+        },
+        { "name":   "Metrics",
+          "#": "Provides Pipeline and PipelineElement timing information",
+          "input":  [],
+          "output": [{"name": "overlay", "type": "[overlay]"}],
+          "deploy": {
+            "local": {"module": "aiko_services.elements.observe.elements"}
+          }
+        }
+    ]
+}

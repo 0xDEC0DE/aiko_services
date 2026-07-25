@@ -47,6 +47,7 @@ Concepts and PipelineElements documentation
 | [robot/](robot/ReadMe.md) | Robot OODA-loop elements and the Panda3D virtual robot world |
 | [xgo_robot/](xgo_robot/ReadMe.md) | XGO-Mini 2 robot dog — on-robot Actor, laptop-side remote control and video monitor |
 | [system_pipelines/](system_pipelines/ReadMe.md) | System bootstrap through ProcessManager and the distributed webcam-to-YOLOE Pipeline pair |
+| [drone/](drone/ReadMe.md) | NetopSun XR872 WiFi drone |
 
 ## Reading paths
 

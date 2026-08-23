@@ -33,14 +33,12 @@ Navigation: [elements index](../ReadMe.md) ·
 | [audio_io](audio_io.md) | Audio elements — working `AudioOutput`, an `AudioReadFile` scaffold, and a disabled legacy microphone / FFT / speaker suite |
 | [elements](elements.md) | `Mock` and `NoOp` — minimal placeholder elements for scaffolding and wiring tests |
 | [image_io](image_io.md) | Image sources, transforms (convert / resize / crop / overlay) and targets — files or ZeroMQ, PIL or NumPy |
-| [images_to_video](images_to_video.md) | Legacy Pipeline_2020 script for images → video; superseded by `images_to_video_pipeline.json` |
 | [scheme_file](scheme_file.md) | `file:` DataScheme — files, directories and `{}` glob/format templates; the default scheme |
 | [scheme_synth](scheme_synth.md) | `synth://` DataScheme — synthesized video frames with the frame id and a timestamp, no camera; an extensible kind/pattern URL grammar |
 | [scheme_tty](scheme_tty.md) | `tty://` DataScheme — line-oriented interactive terminal input/output |
 | [scheme_zmq](scheme_zmq.md) | `zmq://` DataScheme — out-of-band record transport over ZeroMQ PUSH/PULL |
 | [synthetic_io](synthetic_io.md) | `SyntheticVideoRead` — camera-less video DataSource built on the `synth://` scheme |
 | [text_io](text_io.md) | Text sources, transforms and targets — files, terminal REPL or ZeroMQ; the exemplar element family |
-| [video_example](video_example.md) | Legacy Pipeline_2020 branching-video demonstration with a StateMachine; dormant |
 | [video_io](video_io.md) | Video file decode / sample / display / encode elements, plus `open_video_capture()` |
 | [webcam_io](webcam_io.md) | `VideoReadWebcam` — live camera DataSource with hot-swappable device and live share controls |
 

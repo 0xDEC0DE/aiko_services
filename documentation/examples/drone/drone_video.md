@@ -2,8 +2,7 @@
 title: Drone camera video (drone_video.py)
 description: ImageReadDroneXR872 — a DataSource PipelineElement that
   reassembles the NetopSun XR872's fragmented raw-UDP MJPEG stream into
-  images. Ported directly from a decompiled Android app; wired into a
-  working, committed Pipeline
+  images. One of two Graph Paths in drone_pipeline.json
 type: concept
 audience: [developers, end-users]
 status: work-in-progress
@@ -12,9 +11,9 @@ source:
   - src/aiko_services/examples/drone/drone_video.py
   - src/aiko_services/examples/drone/drone_pipeline.json
 related: [pipeline, pipeline_element, data_source_target, stream,
-  drone_control, image_io, yolo]
-version: "0.8"
-last_updated: 2026-08-27
+  drone_control, controller_input, image_io, yolo]
+version: "0.9"
+last_updated: 2026-09-11
 ---
 
 # Drone camera video (drone_video.py)
@@ -29,17 +28,19 @@ the video stream, then receives JPEG frames fragmented across UDP
 datagrams (a 4-byte per-packet header: frame id, last-packet flag,
 sequence number, one reserved byte) and reassembles them.
 
-Like [drone_control](drone_control.md), this module's protocol
-handling is a direct port of a decompiled Android app
-(`XR872VideoFrameDataExtractor.onVideoData()`), and has been
-separately validated against a known-working reference implementation.
-
-**Why to use it**: this is the one part of the drone example that
-already runs today, end to end:
+**Why to use it**: this is the video half of the drone example, on its
+own Graph Path in `drone_pipeline.json`:
 
 ```bash
-cd src/aiko_services/examples/drone
-aiko_pipeline create drone_pipeline.json -s 1 -ll debug
+cd /path/to/repo
+hatch run aiko_pipeline create --log_level _all --log_mqtt all \
+  -r src/aiko_services/examples/drone/drone_pipeline.json
+```
+
+Then, in another window, create this Graph Path's Stream:
+
+```bash
+hatch run aiko_pipeline update p_drone -s 1 -gp ImageReadDroneXR872
 ```
 
 ## For application developers
@@ -47,17 +48,22 @@ aiko_pipeline create drone_pipeline.json -s 1 -ll debug
 ### Command-line usage
 
 ```bash
-aiko_pipeline create drone_pipeline.json -s 1 -ll debug \
+hatch run aiko_pipeline update p_drone -s 1 -gp ImageReadDroneXR872 \
   -p ImageReadDroneXR872.device_ip 192.168.28.1
 ```
 
-`drone_pipeline.json` wires
-`ImageReadDroneXR872 → ImageConvert → YoloDetector → ImageOverlay →
-VideoShow → Metrics` — camera in, object detection overlay, live
-display. It carries `_create_stream_` / `_destroy_stream_exit_`
-parameters, so `-s 1` both creates the Stream and exits the process
-when it is destroyed, the same convention used across the other example
-pipelines.
+`drone_pipeline.json` wires `ImageReadDroneXR872 → VideoShow` on this
+Graph Path.
+
+The flight-control side of this same PipelineDefinition is a separate
+Graph Path, started independently:
+
+```bash
+hatch run aiko_pipeline update p_drone -s 2 -gp ControlReadJoystick
+```
+
+See [drone_control](drone_control.md) and
+[controller_input](controller_input.md) for that path.
 
 ### Public API
 
@@ -80,12 +86,12 @@ Live shared state:
   start handshake to `(device_ip, rxtx_port)`, starts a daemon receive
   thread, and starts `create_frames(stream, self.frame_generator)`.
 - The receive thread feeds raw datagrams into an internal
-  `_XR872FrameExtractor`, which reassembles complete, validated JPEGs
+  `_XR872FrameExtractor`, which reassembles them into JPEGs
   (checked for `FFD8`/`FFD9` start/end markers) and pushes them onto a
   queue.
 - `frame_generator()` drains up to `data_batch_size` queued records per
   call; returns `StreamEvent.NO_FRAME` when the queue is empty.
-- `process_frame()` decodes each queued record to an image via
+- `process_frame()` decodes each queued record to an image through
   `bytes_to_image()`, logging and dropping any that fail to decode
   rather than failing the whole Stream.
 - `stop_stream()` joins the receive thread, sends the 7-byte stop
@@ -97,7 +103,7 @@ Live shared state:
 
 ```
    ImageReadDroneXR872                    _XR872FrameExtractor
-   ┌──────────────────────┐              ┌───────────────────────┐
+   ┌───────────────────────┐              ┌───────────────────────┐
    │ start_stream():       │   UDP:7070   │ feed(packet):         │
    │  send start handshake │─────────────►│  reassemble by seq_num│
    │  spawn recv thread ───┼──────────────┼─►  on_frame(jpeg) ────┼──► queue
@@ -105,7 +111,7 @@ Live shared state:
    │  drain queue          │              │  validate SOI/EOI     │
    │ process_frame():      │              └───────────────────────┘
    │  bytes_to_image()     │
-   └──────────────────────┘
+   └───────────────────────┘
 ```
 
 - **Reassembly state is not thread-safe by design** — the module
@@ -113,28 +119,19 @@ Live shared state:
   inside the single receive thread; nothing else touches its buffer,
   position or sequence counters.
 - **Any sequence gap silently drops the rest of that frame**,
-  matching the decompiled Java behavior rather than attempting
-  recovery or logging (no visibility into how often this triggers in
-  practice).
+  there is little point to recovery, logging, etc., since it is assumed
+  there is always another frame to consume.
 - **Packet-size assumption.** A packet is only accepted if it is
   exactly 1472 bytes, or is the frame's final packet (which may be
   shorter). This assumes the local network MTU is the Ethernet
   default — reasonable since the drone provides the network, but not
-  verified against alternate configurations.
+  guaranteed to be true if the controller is on the other end of a
+  suitably complex network.
 
 ### Implementation notes
 
-- `MAX_FRAME_SIZE = 300_000` matches the original app's
-  `frameBufferSize`; a frame exceeding it resets the reassembly buffer
-  and drops the in-progress frame rather than growing it.
-- There is no "take photo" / "start recording" signal to the drone in
-  this protocol — per the module docstring, the vendor app's
-  photo/record buttons only flash a light on the drone (two flag bits
-  carried in the *flight-control* packet, see
-  [drone_control](drone_control.md)) and otherwise just grab frames
-  from this same local video stream. Any photo/record feature built on
-  top of this element would be a client-side concern, not a
-  drone-side command.
+- `MAX_FRAME_SIZE = 300_000`: a frame exceeding it resets the
+   reassembly buffer and drops the in-progress frame rather than growing it.
 - `stream.variables["timestamps"]` is hard-coded to a 25 fps clock in
   `process_frame()` — an assumed, not measured, frame rate.
 
@@ -144,27 +141,16 @@ Live shared state:
 |-------|------------------|---------------|
 | `ImageReadDroneXR872` | Send start/stop handshake; run the UDP receive thread; hand off to the frame extractor; decode queued JPEGs to images; report `frame_count` | [DataSource](../../concepts/data_source_target.md) (base), [PipelineElement](../../concepts/pipeline_element.md) (`create_frames()`), `_XR872FrameExtractor` (packet reassembly), `bytes_to_image()` ([image_io](../../elements/media/image_io.md)) |
 
-## Current limitations and roadmap
-
-- No hardware-capture-based validation of the reassembly logic is
-  recorded anywhere in the repository — it is a direct port of
-  decompiled logic, not an independently-verified implementation (contrast
-  with [drone_control](drone_control.md)).
-- No documentation existed for this module before this document.
-- Otherwise, this is the working half of the drone example: it has a
-  committed, runnable Pipeline and needs no wiring changes to keep
-  functioning as-is.
-
 ## Related concepts
 
-- [drone_control](drone_control.md) — the flight-control element this
-  video path is meant to run alongside
+- [drone_control](drone_control.md) — the flight-control element that
+  now runs alongside this one, on its own Graph Path in the same
+  PipelineDefinition
+- [controller_input](controller_input.md) — the joystick DataSource
+  driving that flight-control Graph Path
 - [DataSource / DataTarget](../../concepts/data_source_target.md) —
   base class contract
-- [Pipeline](../../concepts/pipeline.md) — graph model
+- [Pipeline](../../concepts/pipeline.md) — graph model; multiple
+  independently-headed Graph Paths in one PipelineDefinition
 - [Stream](../../concepts/stream.md) — `start_stream()` / `stop_stream()`
   lifecycle, `create_frames()` pacing
-- [image_io](../../elements/media/image_io.md) — `bytes_to_image()`,
-  `ImageConvert`, `ImageOverlay` used downstream in `drone_pipeline.json`
-- [yolo](../yolo/yolo.md) — `YoloDetector`, used downstream in
-  `drone_pipeline.json`

@@ -1,8 +1,9 @@
 ---
 title: NetopSun XR872 drone example index
 description: Index of the NetopSun XR872 WiFi drone example concept
-  documents — the camera DataSource and the flight-control DataTarget —
-  and the current gap between them
+  documents — the camera DataSource, the flight-control DataTarget, and
+  the joystick DataSource that drives it, wired into a single
+  two-Graph-Path Pipeline
 type: index
 audience: [developers, end-users]
 status: work-in-progress
@@ -10,8 +11,8 @@ ste: adapted
 source:
   - src/aiko_services/examples/drone
 related: [pipeline, pipeline_element, data_source_target, stream, xgo_robot]
-version: "0.8"
-last_updated: 2026-08-27
+version: "0.9"
+last_updated: 2026-09-11
 ---
 
 # NetopSun XR872 drone example index
@@ -30,35 +31,24 @@ Navigation: [concepts guide](../../concepts/ReadMe.md) ·
 
 | Document | Summary |
 |----------|---------|
-| [drone_video](drone_video.md) | `ImageReadDroneXR872` — camera `DataSource`. Handshake + fragmented-MJPEG reassembly over raw UDP. Wired into a working, committed Pipeline |
-| [drone_control](drone_control.md) | `FlightWriteDroneXR872` — flight-control `DataTarget`. Continuous stick/action heartbeat over raw UDP, adapted from an already-validated plain Python reference implementation. **Not wired into any Pipeline** |
+| [drone_video](drone_video.md) | `ImageReadDroneXR872` — camera `DataSource`. Handshake + fragmented-MJPEG reassembly over raw UDP |
+| [drone_control](drone_control.md) | `FlightWriteDroneXR872` — flight-control `DataTarget`. Continuous stick/action heartbeat over raw UDP, adapted from an already-validated plain Python reference implementation |
+| [controller_input](controller_input.md) | `ControlReadJoystick` — local game-controller `DataSource`. Reads a `pygame` joystick, shapes the axes, and emits the `control_input` / `requested_action` frame data `FlightWriteDroneXR872` expects. Also a standalone `--inspect` CLI for building new controller mappings |
 
 ## Example PipelineDefinitions
 
 | PipelineDefinition | Module document(s) | Purpose |
 |--------------------|--------------------|---------|
-| `drone_pipeline.json` | [drone_video](drone_video.md) | Camera → convert → YOLO detect → overlay → display → metrics. Video-only; does not include flight control |
-
-There is no committed PipelineDefinition that includes
-`FlightWriteDroneXR872`. See [drone_control](drone_control.md) §
-"Current limitations and roadmap" for what is missing to add one.
-
-## Current state, in one sentence
-
-Aiko can watch this drone today; it cannot fly it yet — the
-flight-control element is implemented and its protocol is known-working,
-but nothing in the repository wires it into a Pipeline or feeds it the
-`control_input` / `requested_action` frame data it expects.
+| `drone_pipeline.json` | [drone_video](drone_video.md), [controller_input](controller_input.md), [drone_control](drone_control.md) | Two independent Graph Paths in one PipelineDefinition: camera → display (`ImageReadDroneXR872 → VideoShow`), and joystick → flight control (`ControlReadJoystick → FlightWriteDroneXR872`) |
 
 ## Related documentation
 
-- [Pipeline](../../concepts/pipeline.md) — Pipeline/PipelineElement graph
-  model; current limitations on multiple independently-clocked sources
-  in one graph
+- [Pipeline](../../concepts/pipeline.md) — Pipeline/PipelineElement
+  graph model; multiple independently-headed sub-graphs (Graph Paths)
+  in one PipelineDefinition, selected with `-gp`
 - [DataSource / DataTarget](../../concepts/data_source_target.md) —
-  the base classes both drone elements extend
+  the base classes all three drone elements extend
 - [Stream](../../concepts/stream.md) — `start_stream()` / `stop_stream()`
-  lifecycle both elements rely on
-- [xgo_robot example](../xgo_robot/ReadMe.md) — the closest analog in
-  this repository: another physical-robot example with the same
-  input-source gap (keyboard → command) left as an open `To Do`
+  lifecycle all three elements rely on
+- [xgo_robot example](../xgo_robot/ReadMe.md) — the closest analogue in
+  this repository: another physical-robot example
